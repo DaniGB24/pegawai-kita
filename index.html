@@ -1,111 +1,316 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Absensi QR</title>
+
   <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
       max-width: 500px;
       margin: 30px auto;
       padding: 16px;
+      color: #1f2937;
     }
-    button {
-      padding: 12px 18px;
+
+    h2 {
+      text-align: center;
+    }
+
+    button, select {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 12px;
       margin: 8px 0;
-      cursor: pointer;
+      font-size: 16px;
     }
-    #reader { width: 100%; }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 6px;
+      background: #174477;
+      color: white;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #stop {
+      background: #6b7280;
+    }
+
+    #reader {
+      width: 100%;
+      margin: 12px 0;
+    }
+
+    #status, #hasilScan {
+      padding: 12px;
+      border-radius: 6px;
+      background: #f3f4f6;
+      overflow-wrap: anywhere;
+    }
+
+    #hasilScan {
+      white-space: pre-line;
+      line-height: 1.6;
+    }
+
+    .label {
+      font-weight: bold;
+      margin-top: 16px;
+    }
   </style>
 </head>
+
 <body>
   <h2>Absensi QR</h2>
-  <p id="status">Tekan tombol untuk membuka kamera.</p>
+
+  <p class="label">Pilih Sesi Apel</p>
+  <select id="shift">
+    <option value="PAGI">PAGI</option>
+    <option value="SORE">SORE</option>
+  </select>
+
+  <p id="status" role="status" aria-live="polite">
+    Tekan tombol untuk membuka kamera.
+  </p>
+
   <div id="reader"></div>
+
   <button id="start">Mulai Scan</button>
-  <button id="stop">Hentikan Kamera</button>
+  <button id="stop" disabled>Hentikan Kamera</button>
+
+  <h3>Hasil Absensi</h3>
+  <div id="hasilScan" role="status" aria-live="polite">
+    Belum ada hasil scan.
+  </div>
 
   <script>
-  const API_URL = "https://script.google.com/macros/s/AKfycbxL2w2Yfa1YF0vP1Aeusee1xNatSNP1yXnJxZQAV_DUxD36ZBjrFOURk1aAXmf2CaIe/exec";
+    const API_URL =
+      "https://script.google.com/macros/s/AKfycbxL2w2Yfa1YF0vP1Aeusee1xNatSNP1yXnJxZQAV_DUxD36ZBjrFOURk1aAXmf2CaIe/exec";
 
-  async function testAPI() {
-    try {
-      const response = await fetch(
-        `${API_URL}?action=test`
-      );
-
-      const body = await response.text();
-
-      console.log("Status HTTP:", response.status);
-      console.log("URL respons:", response.url);
-      console.log("Isi respons:", body.slice(0, 1000));
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      try {
-        console.log("Hasil JSON:", JSON.parse(body));
-      } catch {
-        console.error(
-          "Respons bukan JSON. Periksa URL, akses, dan deployment."
-        );
-      }
-    } catch (error) {
-      console.error("Gagal mengakses API:", error);
-    }
-  }
-
-  testAPI();
-  </script>
-
-  <script>
     let scanner = null;
     let processing = false;
 
-    document.getElementById("start").onclick = async () => {
+    const statusEl = document.getElementById("status");
+    const hasilEl = document.getElementById("hasilScan");
+    const startBtn = document.getElementById("start");
+    const stopBtn = document.getElementById("stop");
+    const shiftEl = document.getElementById("shift");
+
+    // Uji koneksi API.
+    async function testAPI() {
+      try {
+        const response = await fetch(
+          `${API_URL}?action=test`
+        );
+
+        const body = await response.text();
+
+        console.log("Status API:", response.status);
+        console.log("Respons API:", body);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = JSON.parse(body);
+        console.log("Hasil pengujian:", data);
+      } catch (error) {
+        console.error("Pengujian API gagal:", error);
+      }
+    }
+
+    // Mengirim token QR dan sesi ke Google Apps Script.
+    async function scanQR(token, shift) {
+      try {
+        const params = new URLSearchParams({
+          action: "scan",
+          token: token,
+          shift: shift
+        });
+
+        const response = await fetch(
+          `${API_URL}?${params.toString()}`
+        );
+
+        const body = await response.text();
+
+        console.log("Status scan HTTP:", response.status);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = JSON.parse(body);
+        console.log("Respons scan:", data);
+
+        const result = data.result || data;
+
+        if (data.success && result.ok) {
+          return result;
+        }
+
+        return {
+          ok: false,
+          duplicate: result.duplicate || false,
+          message:
+            result.message ||
+            data.message ||
+            "Absensi gagal."
+        };
+
+      } catch (error) {
+        console.error("Gagal mengirim scan:", error);
+
+        return {
+          ok: false,
+          message:
+            "Gagal menghubungi API. Periksa koneksi dan Console."
+        };
+      }
+    }
+
+    // Menampilkan respons dari backend.
+    function tampilkanHasil(result) {
+      if (result.ok) {
+        statusEl.textContent = "Absensi berhasil dicatat.";
+
+        hasilEl.textContent =
+          "STATUS: HADIR\n" +
+          "Nama: " + (result.nama || "-") + "\n" +
+          "NIP: " + (result.nip || "-") + "\n" +
+          "Sesi: " + (result.shift || "-") + "\n" +
+          "Waktu: " + (result.waktu || "-") + "\n" +
+          (result.message || "");
+      } else {
+        statusEl.textContent = "Absensi tidak berhasil.";
+
+        hasilEl.textContent =
+          (result.duplicate ? "SCAN DUPLIKAT\n" : "") +
+          (result.message || "Absensi gagal.");
+      }
+    }
+
+    // Callback scanner: fungsi ini dipanggil saat QR terbaca.
+    async function onScanSuccess(decodedText) {
+      if (processing) return;
+
+      processing = true;
+      startBtn.disabled = true;
+
+      try {
+        const token = decodedText.trim();
+        const shift = shiftEl.value;
+
+        statusEl.textContent = "QR terbaca. Memvalidasi absensi...";
+        hasilEl.textContent = "Mengirim data ke server...";
+
+        console.log("Token QR terbaca:", token);
+        console.log("Sesi dipilih:", shift);
+
+        const result = await scanQR(token, shift);
+
+        tampilkanHasil(result);
+
+      } finally {
+        // Jeda singkat untuk mencegah QR yang sama
+        // dikirim berulang kali oleh kamera.
+        setTimeout(() => {
+          processing = false;
+          startBtn.disabled = Boolean(scanner);
+        }, 1500);
+      }
+    }
+
+    // Memulai kamera.
+    startBtn.onclick = async () => {
       if (scanner) return;
+
+      if (typeof Html5Qrcode === "undefined") {
+        statusEl.textContent =
+          "Library scanner gagal dimuat.";
+        return;
+      }
 
       try {
         scanner = new Html5Qrcode("reader");
 
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: 250 },
-          async (decodedText) => {
-            if (processing) return;
-            processing = true;
-
-            document.getElementById("status").textContent =
-              "QR terbaca: " + decodedText;
-
-            // Integrasikan fungsi onScan() lama di sini.
-
-            setTimeout(() => {
-              processing = false;
-            }, 1500);
-          }
+          {
+            fps: 10,
+            qrbox: 250
+          },
+          onScanSuccess
         );
+
+        statusEl.textContent =
+          "Kamera aktif. Arahkan kamera ke QR pegawai.";
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        shiftEl.disabled = true;
+
       } catch (error) {
-        scanner = null;
-        document.getElementById("status").textContent =
-          "Kamera gagal: " + error.message;
+        console.error("Kamera gagal:", error);
+
+        statusEl.textContent =
+          "Kamera gagal: " +
+          (error.message || String(error));
+
+        if (scanner) {
+          try {
+            await scanner.clear();
+          } catch (_) {}
+
+          scanner = null;
+        }
+
+        startBtn.disabled = false;
       }
     };
 
-    document.getElementById("stop").onclick = async () => {
+    // Menghentikan kamera.
+    stopBtn.onclick = async () => {
       if (!scanner) return;
 
+      stopBtn.disabled = true;
+
       try {
-        if (scanner.isScanning) await scanner.stop();
+        if (scanner.isScanning) {
+          await scanner.stop();
+        }
+
         await scanner.clear();
+
+        statusEl.textContent = "Kamera dihentikan.";
+
+      } catch (error) {
+        console.error("Gagal menghentikan kamera:", error);
+
+        statusEl.textContent =
+          "Terjadi masalah saat menghentikan kamera.";
+
       } finally {
         scanner = null;
+        processing = false;
+
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        shiftEl.disabled = false;
       }
     };
+
+    // Jalankan tes koneksi ketika halaman dibuka.
+    testAPI();
   </script>
 </body>
 </html>
