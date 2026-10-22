@@ -31,7 +31,20 @@
   <script>
     let scanner = null;
     let processing = false;
+    const API_URL = "1Im_P0q2uc5wqDwCgaZWkbjR_gCEBzozr6H96Hi8fR8_Ekvp1r7NTWIhHhttps://script.google.com/macros/s/AKfycbxL2w2Yfa1YF0vP1Aeusee1xNatSNP1yXnJxZQAV_DUxD36ZBjrFOURk1aAXmf2CaIe/exec";
 
+    async function testAPI() {
+      try {
+        const response = await fetch(
+          `${API_URL}?action=test`
+        );
+
+        const result = await response.json();
+        console.log(result);
+      } catch (error) {
+        console.error("Gagal mengakses API:", error);
+      }
+    }
     document.getElementById("start").onclick = async () => {
       if (scanner) return;
 
