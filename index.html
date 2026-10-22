@@ -37,8 +37,23 @@
         `${API_URL}?action=test`
       );
 
-      const result = await response.json();
-      console.log(result);
+      const body = await response.text();
+
+      console.log("Status HTTP:", response.status);
+      console.log("URL respons:", response.url);
+      console.log("Isi respons:", body.slice(0, 1000));
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      try {
+        console.log("Hasil JSON:", JSON.parse(body));
+      } catch {
+        console.error(
+          "Respons bukan JSON. Periksa URL, akses, dan deployment."
+        );
+      }
     } catch (error) {
       console.error("Gagal mengakses API:", error);
     }
