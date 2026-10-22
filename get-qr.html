@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generate QR Pegawai</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 30px auto;
+      padding: 16px;
+      color: #1f2937;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 16px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      background: #174477;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #status {
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      overflow-wrap: anywhere;
+    }
+
+    #hasil {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+
+    #qrcode {
+      display: flex;
+      justify-content: center;
+      margin: 20px 0;
+    }
+
+    #qrcode img, #qrcode canvas {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .nama {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+
+      #hasil, #hasil * {
+        visibility: visible;
+      }
+
+      #hasil {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        border: none;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h2>QR Pegawai</h2>
+
+  <form id="formQR">
+    <label for="nip">Masukkan NIP Pegawai</label>
+    <input
+      type="text"
+      id="nip"
+      placeholder="Masukkan NIP"
+      autocomplete="off"
+      required
+    >
+
+    <button type="submit" id="btnCari">
+      Cari dan Tampilkan QR
+    </button>
+  </form>
+
+  <p id="status" role="status" aria-live="polite">
+    Masukkan NIP untuk mencari QR pegawai.
+  </p>
+
+  <div id="hasil">
+    <div class="nama" id="nama"></div>
+    <p id="nipHasil"></p>
+    <p id="jabatan"></p>
+    <p id="unitKerja"></p>
+
+    <div id="qrcode"></div>
+
+    <button type="button" class="no-print" id="btnCetak">
+      Cetak QR
+    </button>
+  </div>
+
+  <script>
+    const API_URL =
+      "https://script.google.com/macros/s/AKfycbxL2w2Yfa1YF0vP1Aeusee1xNatSNP1yXnJxZQAV_DUxD36ZBjrFOURk1aAXmf2CaIe/exec";
+
+    const form = document.getElementById("formQR");
+    const inputNip = document.getElementById("nip");
+    const btnCari = document.getElementById("btnCari");
+    const statusEl = document.getElementById("status");
+    const hasilEl = document.getElementById("hasil");
+    const qrEl = document.getElementById("qrcode");
+
+    form.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      const nip = inputNip.value.trim();
+
+      if (!nip) {
+        statusEl.textContent = "Silakan masukkan NIP.";
+        return;
+      }
+
+      btnCari.disabled = true;
+      hasilEl.style.display = "none";
+      qrEl.replaceChildren();
+      statusEl.textContent = "Mencari data pegawai...";
+
+      try {
+        const params = new URLSearchParams({
+          action: "getQR",
+          nip: nip
+        });
+
+        const response = await fetch(
+          `${API_URL}?${params.toString()}`
+        );
+
+        const body = await response.text();
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = JSON.parse(body);
+
+        if (!result.success || !result.data) {
+          statusEl.textContent =
+            result.message || "Data pegawai tidak ditemukan.";
+          return;
+        }
+
+        const pegawai = result.data;
+
+        document.getElementById("nama").textContent =
+          pegawai.nama || "-";
+
+        document.getElementById("nipHasil").textContent =
+          "NIP: " + (pegawai.nip || "-");
+
+        document.getElementById("jabatan").textContent =
+          "Jabatan: " + (pegawai.jabatan || "-");
+
+        document.getElementById("unitKerja").textContent =
+          "Unit Kerja: " + (pegawai.unitKerja || "-");
+
+        new QRCode(qrEl, {
+          text: pegawai.token,
+          width: 220,
+          height: 220,
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        hasilEl.style.display = "block";
+        statusEl.textContent = "QR pegawai berhasil dibuat.";
+
+      } catch (error) {
+        console.error("Gagal mengambil QR:", error);
+
+        statusEl.textContent =
+          "Gagal mengambil QR. Periksa koneksi API dan deployment.";
+
+      } finally {
+        btnCari.disabled = false;
+      }
+    });
+
+    document.getElementById("btnCetak").addEventListener(
+      "click",
+      function() {
+        window.print();
+      }
+    );
+  </script>
+</body>
+</html>
