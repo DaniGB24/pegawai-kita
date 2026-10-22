@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Absensi QR</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 30px auto;
+      padding: 16px;
+    }
+    button {
+      padding: 12px 18px;
+      margin: 8px 0;
+      cursor: pointer;
+    }
+    #reader { width: 100%; }
+  </style>
+</head>
+<body>
+  <h2>Absensi QR</h2>
+  <p id="status">Tekan tombol untuk membuka kamera.</p>
+  <div id="reader"></div>
+  <button id="start">Mulai Scan</button>
+  <button id="stop">Hentikan Kamera</button>
+
+  <script>
+    let scanner = null;
+    let processing = false;
+
+    document.getElementById("start").onclick = async () => {
+      if (scanner) return;
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          async (decodedText) => {
+            if (processing) return;
+            processing = true;
+
+            document.getElementById("status").textContent =
+              "QR terbaca: " + decodedText;
+
+            // Integrasikan fungsi onScan() lama di sini.
+
+            setTimeout(() => {
+              processing = false;
+            }, 1500);
+          }
+        );
+      } catch (error) {
+        scanner = null;
+        document.getElementById("status").textContent =
+          "Kamera gagal: " + error.message;
+      }
+    };
+
+    document.getElementById("stop").onclick = async () => {
+      if (!scanner) return;
+
+      try {
+        if (scanner.isScanning) await scanner.stop();
+        await scanner.clear();
+      } finally {
+        scanner = null;
+      }
+    };
+  </script>
+</body>
+</html>
